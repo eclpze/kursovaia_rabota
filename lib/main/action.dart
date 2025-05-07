@@ -1,0 +1,32 @@
+import 'package:flutter/material.dart';
+
+class DayOfWeekImage extends StatefulWidget {
+  @override
+  _DayOfWeekImageState createState() => _DayOfWeekImageState();
+}
+
+class _DayOfWeekImageState extends State<DayOfWeekImage> {
+  String getImageForDayOfWeek(int dayOfWeek) {
+    switch (dayOfWeek) {
+      case DateTime.monday || DateTime.wednesday || DateTime.friday:
+        return 'assets/images/action-tiramisu.png';
+      case DateTime.tuesday || DateTime.thursday:
+        return 'assets/images/action-latte.png';
+      case DateTime.saturday || DateTime.sunday:
+        return 'assets/images/action-tort.png';
+      default:
+        return 'assets/images/action-default.png';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final dayOfWeek = now.weekday;
+    final imagePath = getImageForDayOfWeek(dayOfWeek);
+
+    return Image.asset(imagePath);
+  }
+}
+
+
