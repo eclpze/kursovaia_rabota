@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:kursovaia_work/main/action.dart';
 import 'package:kursovaia_work/main/categories.dart';
 import 'package:kursovaia_work/main/popular.dart';
+import 'package:kursovaia_work/test.dart';
 
 class Home extends StatelessWidget {
   const Home({super.key});
@@ -99,7 +100,10 @@ class Home extends StatelessWidget {
                     ),
                   ),
                   Spacer(),
-                  SvgPicture.asset('assets/icons/arrow-right.svg'),
+                  GestureDetector(onTap: () {
+                    Navigator.of(context).push(MaterialPageRoute(builder: (context) => CategoriesPage()));
+                  },
+                      child: SvgPicture.asset('assets/icons/arrow-right.svg')),
                 ],
               ),
               Categories(),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 class DayOfWeekImage extends StatefulWidget {
+  const DayOfWeekImage({super.key});
+
   @override
   _DayOfWeekImageState createState() => _DayOfWeekImageState();
 }

@@ -22,7 +22,7 @@ class Popular extends StatelessWidget {
         }
 
         if (snapshot.hasError) {
-          return Center(child: Text('Ошибка загрузки данных'));
+          return Center(child: Text('Ошибка загрузки данных', style: GoogleFonts.nunitoSans()));
         }
 
         final products = snapshot.data ?? [];
@@ -55,7 +55,7 @@ class PopularProducts extends StatelessWidget {
           .eq('is_popular', true),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator());
+          return Center(child: CircularProgressIndicator(color: Colors.black));
         }
 
         if (snapshot.hasError) {

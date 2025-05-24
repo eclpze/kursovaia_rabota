@@ -18,7 +18,7 @@ class Categories extends StatelessWidget {
         }
 
         if (snapshot.hasError) {
-          return Center(child: Text('Ошибка загрузки категорий'));
+          return Center(child: Text('Ошибка загрузки категорий', style: GoogleFonts.nunitoSans()));
         }
 
         final categories = snapshot.data ?? [];
@@ -110,28 +110,6 @@ class CategoryCard extends StatelessWidget {
   }
 }
 
-class CategoriesPage extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Категории'),
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: SearchBar(),
-            ),
-            Categories(),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class CategoryProductsPage extends StatelessWidget {
   final String categoryId;
 
@@ -140,7 +118,8 @@ class CategoryProductsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      backgroundColor: Colors.white,
+      appBar: AppBar(backgroundColor: Colors.white, surfaceTintColor: Colors.white               ,
         title: FutureBuilder<Map<String, dynamic>?>(
           future: Supabase.instance.client
               .from('categories')
@@ -148,10 +127,13 @@ class CategoryProductsPage extends StatelessWidget {
               .eq('id', categoryId)
               .single(),
           builder: (context, snapshot) {
-            if (snapshot.hasData) {
-              return Text(snapshot.data!['name'] ?? 'Категория');
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Text('Загрузка...', style: GoogleFonts.nunitoSans());
             }
-            return Text('Категория');
+            if (snapshot.hasError) {
+              return Text('Ошибка загрузки', style: GoogleFonts.nunitoSans());
+            }
+            return Text(snapshot.data?['name'] ?? 'Категория');
           },
         ),
       ),
@@ -159,18 +141,31 @@ class CategoryProductsPage extends StatelessWidget {
         future: Supabase.instance.client
             .from('products')
             .select()
-            .eq('category', categoryId),
+            .eq('category_id', categoryId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
+            return Center(child: CircularProgressIndicator(color: Colors.black));
           }
 
           if (snapshot.hasError) {
-            return Center(child: Text('Ошибка загрузки товаров'));
+            return Center(
+              child: Text(
+                'Ошибка загрузки товаров',
+                style: GoogleFonts.nunitoSans(),
+              ),
+            );
           }
 
           final products = snapshot.data ?? [];
 
+          if (products.isEmpty) {
+            return Center(
+              child: Text(
+                'В этой категории пока нет товаров',
+                style: GoogleFonts.nunitoSans(),
+              ),
+            );
+          }
           return MasonryGridView.count(
             padding: EdgeInsets.all(16),
             crossAxisCount: 2,
@@ -187,4 +182,179 @@ class CategoryProductsPage extends StatelessWidget {
   }
 }
 
+class CategoriesPage extends StatefulWidget {
+  @override
+  _CategoriesPageState createState() => _CategoriesPageState();
+}
 
+class _CategoriesPageState extends State<CategoriesPage> {
+  late Future<List<Map<String, dynamic>>> _categoriesFuture;
+  int _selectedCategory = 0;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _categoriesFuture = _fetchCategories();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchCategories() async {
+    final response = await Supabase.instance.client.from('categories').select();
+    return response;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: Text('Категории', style: GoogleFonts.nunitoSans(
+          fontSize: 24,
+          fontWeight: FontWeight.bold,
+        )),
+        centerTitle: true,
+        surfaceTintColor: Colors.white,
+        backgroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _categoriesFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator(color: Colors.black));
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                'Ошибка загрузки категорий',
+                style: GoogleFonts.nunitoSans(),
+              ),
+            );
+          }
+
+          final categories = snapshot.data ?? [];
+          if (categories.isEmpty) {
+            return Center(
+              child: Text(
+                'Категории не найдены',
+                style: GoogleFonts.nunitoSans(),
+              ),
+            );
+          }
+
+          return Column(
+            children: [
+              SizedBox(
+                height: 60,
+                child: ListView.builder(
+                  controller: _scrollController,
+                  scrollDirection: Axis.horizontal,
+                  itemCount: categories.length,
+                  itemBuilder: (context, index) {
+                    return Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selectedCategory = index;
+                          });
+                        },
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              categories[index]['name'] ?? 'Категория',
+                              style: GoogleFonts.nunitoSans(
+                                fontSize: 16,
+                                fontWeight: _selectedCategory == index
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                                color: _selectedCategory == index
+                                    ? Color(0xffFE8160)
+                                    : Colors.grey,
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            if (_selectedCategory == index)
+                              Container(
+                                height: 3,
+                                width: 40,
+                                color: Color(0xffFE8160),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              Divider(height: 1, color: Colors.grey[300]),
+              Expanded(
+                child: _buildProductsList(categories[_selectedCategory]),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildProductsList(Map<String, dynamic> category) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: Supabase.instance.client
+          .from('products')
+          .select()
+          .eq('category_id', category['id']),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator(color: Colors.black));
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Text(
+              'Ошибка загрузки товаров',
+              style: GoogleFonts.nunitoSans(),
+            ),
+          );
+        }
+
+        final products = snapshot.data ?? [];
+
+        if (products.isEmpty) {
+          return Center(
+            child: Text(
+              'В этой категории пока нет товаров',
+              style: GoogleFonts.nunitoSans(),
+            ),
+          );
+        }
+
+        return Expanded(
+          child: GridView.builder(
+            shrinkWrap: true,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 0.75,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+            ),
+            itemCount: products.length,
+            padding: EdgeInsets.fromLTRB(10, 0, 10, 15),
+            itemBuilder: (context, index) {
+              final product = products[index];
+              return ProductCard(product: product);
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+}

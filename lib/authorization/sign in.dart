@@ -63,7 +63,7 @@ class _SignInState extends State<SignIn> {
                       borderRadius: BorderRadius.all(Radius.circular(20)),
                       borderSide: BorderSide(color: Color(0xffEDEEEE)),
                     ),
-                    hintText: "xyz@gmail.com",
+                    hintText: "Введите почту",
                     contentPadding: EdgeInsets.symmetric(
                       vertical: 15,
                       horizontal: 15,
@@ -95,7 +95,7 @@ class _SignInState extends State<SignIn> {
                       borderRadius: BorderRadius.all(Radius.circular(20)),
                       borderSide: BorderSide(color: Color(0xffEDEEEE)),
                     ),
-                    hintText: "••••••••",
+                    hintText: "Введите пароль",
                     contentPadding: EdgeInsets.symmetric(
                       vertical: 15,
                       horizontal: 15,
@@ -142,7 +142,7 @@ class _SignInState extends State<SignIn> {
                     color: const Color(0xffFE8160),
                     borderRadius: BorderRadius.all(Radius.circular(40)),
                   ),
-                  width: MediaQuery.of(context).size.width * 0.95,
+                  width: MediaQuery.of(context).size.width * 0.9,
                   height: 55,
                   child: Center(
                     child: Text(

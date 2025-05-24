@@ -15,17 +15,16 @@ class Main extends StatefulWidget {
 
 class _MainState extends State<Main> {
   int indexPage = 0;
-  final pages = [Home(), Favorite(), Profile(), Cart()];
+  final pages = [const Home(), const Favorite(), const Profile(), const Cart()];
 
   @override
-
   Widget build(BuildContext context) {
     return Scaffold(
       body: pages[indexPage],
       bottomNavigationBar: BottomAppBar(
         color: Colors.white,
         notchMargin: 20,
-        shape: AutomaticNotchedShape(
+        shape: const AutomaticNotchedShape(
           RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(30)),
           ),
@@ -102,7 +101,7 @@ class _MainState extends State<Main> {
                 ],
               ),
             ),
-            SizedBox(width: 35),
+            const SizedBox(width: 35),
             InkWell(
               splashColor: Colors.transparent,
               highlightColor: Colors.transparent,
@@ -174,9 +173,7 @@ class _MainState extends State<Main> {
             ),
           ],
         ),
-      )
+      ),
     );
   }
 }
-
-

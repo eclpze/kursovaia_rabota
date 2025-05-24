@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class Cart extends StatefulWidget {
   const Cart({Key? key}) : super(key: key);
@@ -11,9 +10,6 @@ class Cart extends StatefulWidget {
 }
 
 class _CartPageState extends State<Cart> {
-  final double _packagingFee = 90.0;
-  bool _isLoading = false;
-
   Future<List<Map<String, dynamic>>> _fetchCartItems() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return [];
@@ -21,215 +17,165 @@ class _CartPageState extends State<Cart> {
     final response = await Supabase.instance.client
         .from('cart_items')
         .select('''
-          id, 
-          quantity, 
-          size, 
-          custom_text,
-          products (
+          quantity,
+          product:products (
             id, 
             name, 
             price, 
-            image_url,
-            weight
+            image_url, 
+            description
           )
         ''')
-        .eq('user_id', userId)
-        .order('created_at', ascending: true);
+        .eq('user_id', userId);
 
-    return (response as List).cast<Map<String, dynamic>>();
+    return (response as List).map((item) {
+      final product = item['product'] as Map<String, dynamic>;
+      return {
+        ...product,
+        'quantity': item['quantity'] as int,
+      };
+    }).toList();
   }
 
-  Future<void> _updateQuantity(String cartItemId, int newQuantity) async {
-    if (newQuantity < 1) return;
+  Future<void> _updateQuantity(String productId, int newQuantity) async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
 
-    setState(() => _isLoading = true);
-    try {
-      await Supabase.instance.client
-          .from('cart_items')
-          .update({'quantity': newQuantity})
-          .eq('id', cartItemId);
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  Future<void> _removeItem(String cartItemId) async {
-    setState(() => _isLoading = true);
-    try {
+    if (newQuantity <= 0) {
       await Supabase.instance.client
           .from('cart_items')
           .delete()
-          .eq('id', cartItemId);
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+          .eq('user_id', userId)
+          .eq('product_id', productId);
+    } else {
+      await Supabase.instance.client
+          .from('cart_items')
+          .upsert({
+        'user_id': userId,
+        'product_id': productId,
+        'quantity': newQuantity,
+      });
     }
+
+    setState(() {});
+  }
+
+  Future<void> _removeItem(String productId) async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    await Supabase.instance.client
+        .from('cart_items')
+        .delete()
+        .eq('user_id', userId)
+        .eq('product_id', productId);
+
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: Text('Корзина', style: GoogleFonts.nunitoSans()),
+        backgroundColor: Colors.white,
+        elevation: 0,
+      ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _fetchCartItems(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator());
           }
 
           if (snapshot.hasError) {
-            return Center(child: Text('Ошибка загрузки корзины'));
+            return Center(child: Text('Ошибка загрузки', style: GoogleFonts.nunitoSans()));
           }
 
           final items = snapshot.data ?? [];
+
           if (items.isEmpty) {
             return Center(
               child: Text(
                 'Корзина пуста',
-                style: GoogleFonts.nunitoSans(fontSize: 18),
+                style: GoogleFonts.nunitoSans(),
               ),
             );
           }
-
-          double subtotal = items.fold(0, (sum, item) {
-            final product = item['products'] as Map<String, dynamic>;
-            return sum + (product['price'] * item['quantity']);
-          });
-
-          double total = subtotal + _packagingFee;
 
           return Column(
             children: [
               Expanded(
                 child: ListView.builder(
-                  padding: EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(16),
                   itemCount: items.length,
                   itemBuilder: (context, index) {
                     final item = items[index];
-                    final product = item['products'] as Map<String, dynamic>;
-                    final price = product['price']?.toDouble() ?? 0.0;
-                    final itemTotal = price * item['quantity'];
+                    final price = (item['price'] as num).toDouble();
+                    final quantity = item['quantity'] as int;
+                    final total = price * quantity;
 
                     return Card(
-                      margin: EdgeInsets.only(bottom: 16),
+                      margin: const EdgeInsets.only(bottom: 16),
                       child: Padding(
-                        padding: EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
                           children: [
-                            Row(
-                              children: [
-                                // Изображение товара
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: CachedNetworkImage(
-                                    imageUrl: product['image_url'] ?? '',
-                                    width: 60,
-                                    height: 60,
-                                    fit: BoxFit.cover,
-                                    placeholder: (context, url) => Container(
-                                      color: Colors.grey[200],
-                                    ),
-                                    errorWidget: (context, url, error) =>
-                                        Icon(Icons.fastfood),
-                                  ),
-                                ),
-                                SizedBox(width: 12),
-
-                                // Название и параметры
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        product['name'] ?? '',
-                                        style: GoogleFonts.nunitoSans(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      SizedBox(height: 4),
-                                      if (item['size'] != null)
-                                        Text(
-                                          'Размер: ${item['size']}',
-                                          style: GoogleFonts.nunitoSans(
-                                            fontSize: 12,
-                                            color: Colors.grey[600],
-                                          ),
-                                        ),
-                                      if (item['custom_text'] != null)
-                                        Text(
-                                          'Надпись: ${item['custom_text']}',
-                                          style: GoogleFonts.nunitoSans(
-                                            fontSize: 12,
-                                            color: Colors.grey[600],
-                                          ),
-                                        ),
-                                      Text(
-                                        product['weight'] ?? '',
-                                        style: GoogleFonts.nunitoSans(
-                                          fontSize: 12,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                // Удаление
-                                IconButton(
-                                  icon: Icon(Icons.close, size: 20),
-                                  onPressed: _isLoading
-                                      ? null
-                                      : () => _removeItem(item['id']),
-                                ),
-                              ],
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.network(
+                                item['image_url'] ?? '',
+                                width: 80,
+                                height: 80,
+                                fit: BoxFit.cover,
+                              ),
                             ),
-                            SizedBox(height: 8),
-
-                            // Количество и цена
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item['name'] ?? '',
+                                    style: GoogleFonts.nunitoSans(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '₽${price.toStringAsFixed(2)}',
+                                    style: GoogleFonts.nunitoSans(
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Column(
                               children: [
-                                // Счетчик количества
-                                Container(
-                                  decoration: BoxDecoration(
-                                    border: Border.all(color: Colors.grey[300]!),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      IconButton(
-                                        icon: Icon(Icons.remove, size: 18),
-                                        onPressed: _isLoading
-                                            ? null
-                                            : () => _updateQuantity(
-                                          item['id'],
-                                          item['quantity'] - 1,
-                                        ),
+                                Row(
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.remove),
+                                      onPressed: () => _updateQuantity(
+                                        item['id'].toString(),
+                                        quantity - 1,
                                       ),
-                                      Text(
-                                        item['quantity'].toString(),
-                                        style: GoogleFonts.nunitoSans(),
+                                    ),
+                                    Text(quantity.toString()),
+                                    IconButton(
+                                      icon: const Icon(Icons.add),
+                                      onPressed: () => _updateQuantity(
+                                        item['id'].toString(),
+                                        quantity + 1,
                                       ),
-                                      IconButton(
-                                        icon: Icon(Icons.add, size: 18),
-                                        onPressed: _isLoading
-                                            ? null
-                                            : () => _updateQuantity(
-                                          item['id'],
-                                          item['quantity'] + 1,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
-
-                                // Итоговая цена за позицию
                                 Text(
-                                  '₽${itemTotal.toStringAsFixed(2)}',
+                                  '₽${total.toStringAsFixed(2)}',
                                   style: GoogleFonts.nunitoSans(
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -243,37 +189,51 @@ class _CartPageState extends State<Cart> {
                   },
                 ),
               ),
-
-              // Итоговая сумма
               Container(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   border: Border(top: BorderSide(color: Colors.grey[200]!)),
                 ),
                 child: Column(
                   children: [
-                    _buildSummaryRow('Сумма', subtotal),
-                    _buildSummaryRow('Сборка и упаковка', _packagingFee),
-                    Divider(),
-                    _buildSummaryRow('Итого', total, isTotal: true),
-                    SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xffFE8160),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Итого:',
+                          style: GoogleFonts.nunitoSans(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                        onPressed: _isLoading ? null : () {},
+                        Text(
+                          '₽${items.map((item) => (item['price'] as num).toDouble() * (item['quantity'] as int)).reduce((a, b) => a + b).toStringAsFixed(2)}',
+                          style: GoogleFonts.nunitoSans(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        onPressed: () {
+
+                        },
                         child: Text(
                           'Оформить заказ',
                           style: GoogleFonts.nunitoSans(
-                            fontWeight: FontWeight.bold,
                             fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
                           ),
                         ),
                       ),
@@ -284,32 +244,6 @@ class _CartPageState extends State<Cart> {
             ],
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildSummaryRow(String label, double value, {bool isTotal = false}) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.nunitoSans(
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-              fontSize: isTotal ? 16 : 14,
-            ),
-          ),
-          Text(
-            '₽${value.toStringAsFixed(2)}',
-            style: GoogleFonts.nunitoSans(
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-              fontSize: isTotal ? 16 : 14,
-              color: isTotal ? Color(0xffFE8160) : Colors.black,
-            ),
-          ),
-        ],
       ),
     );
   }

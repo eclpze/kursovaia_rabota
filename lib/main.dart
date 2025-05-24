@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
+import 'package:hive/hive.dart';
 import 'package:kursovaia_work/globals.dart';
 import 'package:kursovaia_work/main/Main.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
@@ -16,6 +18,7 @@ Future<void> main() async {
   );
   runApp(MaterialApp(home: Main()));
 }
+
 
 class Splash extends StatefulWidget {
   const Splash({super.key});
