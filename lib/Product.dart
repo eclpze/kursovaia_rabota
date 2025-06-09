@@ -201,7 +201,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: GoogleFonts.nunitoSans(         )),
+        content: Text(message, style: GoogleFonts.nunitoSans()),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),

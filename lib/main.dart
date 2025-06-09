@@ -1,9 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:hive/hive.dart';
-import 'package:hive/hive.dart';
 import 'package:kursovaia_work/globals.dart';
-import 'package:kursovaia_work/main/Main.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'authorization/sign in.dart';
@@ -16,7 +13,7 @@ Future<void> main() async {
     anonKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6cXZnaXJrbWZ0Y3J0bGZvbGVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAxMzgwMDMsImV4cCI6MjA1NTcxNDAwM30.GIiPuXo_GVX37kEtGmxNg4lKRImKh9a1XKThn2uQV1k',
 
   );
-  runApp(MaterialApp(home: Main()));
+  runApp(MaterialApp(home: Splash()));
 }
 
 
