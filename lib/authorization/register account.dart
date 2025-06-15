@@ -2,9 +2,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kursovaia_work/authorization/sign%20in.dart';
-import 'package:kursovaia_work/globals.dart';
 import 'package:kursovaia_work/main/Main.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class RegisterAccount extends StatefulWidget {
   const RegisterAccount({super.key});
@@ -18,321 +17,305 @@ class _RegisterAccountState extends State<RegisterAccount> {
   bool _isLoading = false;
   bool _termsAccepted = false;
   final _formKey = GlobalKey<FormState>();
-  final _supabase = Supabase.instance.client;
 
-  Future<void> _signUp() async {
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
+  Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
     if (!_termsAccepted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Необходимо принять условия соглашения')),
+        SnackBar(content: Text('Пожалуйста, примите условия соглашения', style: GoogleFonts.nunitoSans())),
       );
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      // 1. Регистрация пользователя в Supabase Auth
-      final authResponse = await _supabase.auth.signUp(
-        email: EmailController.text.trim(),
-        password: PasswordController.text.trim(),
-        data: {
-          'name': NameController.text.trim(),
-          'email': EmailController.text.trim(),
-        },
-      );
+      final prefs = await SharedPreferences.getInstance();
 
-      if (authResponse.user != null) {
-        // 2. Сохранение дополнительных данных в таблице профилей
-        await _supabase.from('profiles').insert({
-          'id': authResponse.user!.id,
-          'email': EmailController.text.trim(),
-          'name': NameController.text.trim(),
-          'created_at': DateTime.now().toIso8601String(),
-        });
+      // Проверка существует ли уже пользователь с таким email
+      final savedUsers = prefs.getStringList('registered_users') ?? [];
+      final emailExists = savedUsers.any((user) => user.split(':')[0] == _emailController.text.trim());
 
-        if (!mounted) return;
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => Main()),
-        );
+      if (emailExists) {
+        throw Exception('Пользователь с таким email уже существует');
       }
-    } on AuthException catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
+
+      // Генерация "уникальный" ID
+      final userId = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Сохранение данных пользователя
+      await prefs.setString('user_id', userId);
+      await prefs.setString('user_name', _nameController.text.trim());
+      await prefs.setString('user_email', _emailController.text.trim());
+
+      // Сохранение учетных данных
+      savedUsers.add('${_emailController.text.trim()}:${_passwordController.text.trim()}');
+      await prefs.setStringList('registered_users', savedUsers);
+
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => Main()),
       );
-    } catch (error) {
+    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка регистрации: $error')),
+        SnackBar(content: Text('Ошибка регистрации: ${e.toString()}', style: GoogleFonts.nunitoSans())),
       );
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _checkCurrentUser() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('user_id');
+
+    if (userId != null && userId.isNotEmpty) {
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => Main()),
+      );
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _checkCurrentUser();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              const SizedBox(height: 90),
-              Text(
-                'Регистрация',
-                textAlign: TextAlign.center,
-                style: AuthorizationTopStyle,
-              ),
-              Padding(
-                padding: const EdgeInsets.only(top: 15, bottom: 40),
-                child: Text(
-                  'Заполните свои данные и\nзарегистрируйтесь',
-                  textAlign: TextAlign.center,
-                  style: AuthorizationBotStyle,
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 25),
-                child: Row(
-                  children: [Text('Имя', style: TopEditStyle), const Spacer()],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(15),
-                child: TextFormField(
-                  controller: NameController,
-                  cursorColor: Colors.black,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Пожалуйста, введите имя';
-                    }
-                    return null;
-                  },
-                  decoration: InputDecoration(
-                    fillColor: const Color(0xffEDEEEE),
-                    filled: true,
-                    enabledBorder: const OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(20)),
-                      borderSide: BorderSide(color: Color(0xffEDEEEE)),
-                    ),
-                    focusedBorder: const OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(20)),
-                      borderSide: BorderSide(color: Color(0xffEDEEEE)),
-                    ),
-                    hintText: "Введите имя",
-                    contentPadding: const EdgeInsets.symmetric(
-                      vertical: 15,
-                      horizontal: 15,
-                    ),
-                    hintStyle: TextEditStyle,
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 25),
-                child: Row(
-                  children: [Text('Почта', style: TopEditStyle), const Spacer()],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(15),
-                child: TextFormField(
-                  controller: EmailController,
-                  keyboardType: TextInputType.emailAddress,
-                  cursorColor: Colors.black,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Пожалуйста, введите почту';
-                    }
-                    if (!value.contains('@')) {
-                      return 'Введите корректный email';
-                    }
-                    return null;
-                  },
-                  decoration: InputDecoration(
-                    fillColor: const Color(0xffEDEEEE),
-                    filled: true,
-                    enabledBorder: const OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(20)),
-                      borderSide: BorderSide(color: Color(0xffEDEEEE)),
-                    ),
-                    focusedBorder: const OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(20)),
-                      borderSide: BorderSide(color: Color(0xffEDEEEE)),
-                    ),
-                    hintText: "Введите почту",
-                    contentPadding: const EdgeInsets.symmetric(
-                      vertical: 15,
-                      horizontal: 15,
-                    ),
-                    hintStyle: TextEditStyle,
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 25),
-                child: Row(
-                  children: [Text('Пароль', style: TopEditStyle), const Spacer()],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(15),
-                child: TextFormField(
-                  controller: PasswordController,
-                  obscureText: _passwordVis,
-                  cursorColor: Colors.black,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Пожалуйста, введите пароль';
-                    }
-                    if (value.length < 6) {
-                      return 'Пароль должен быть не менее 6 символов';
-                    }
-                    return null;
-                  },
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: const Color(0xffEDEEEE),
-                    enabledBorder: const OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(20)),
-                      borderSide: BorderSide(color: Color(0xffEDEEEE)),
-                    ),
-                    focusedBorder: const OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(20)),
-                      borderSide: BorderSide(color: Color(0xffEDEEEE)),
-                    ),
-                    hintText: "Введите пароль",
-                    contentPadding: const EdgeInsets.symmetric(
-                      vertical: 15,
-                      horizontal: 15,
-                    ),
-                    hintStyle: TextEditStyle,
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _passwordVis ? Icons.visibility_off : Icons.visibility,
-                        color: const Color(0xff6A6A6A),
-                        size: 22,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _passwordVis = !_passwordVis;
-                        });
-                      },
-                    ),
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 25),
-                child: Row(
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: IntrinsicHeight(
+                child: Column(
                   children: [
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (context) => SignIn()),
-                        );
-                      },
-                      child: Text(
-                        'Восстановить',
-                        style: GoogleFonts.nunitoSans(
-                          color: const Color(0xff5B5B5B),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                    Expanded(
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          children: [
+                            const SizedBox(height: 90),
+                            Text(
+                              'Регистрация',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.nunitoSans(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 15, bottom: 40),
+                              child: Text(
+                                'Заполните свои данные и\nзарегистрируйтесь',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.nunitoSans(
+                                  fontSize: 16,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ),
+                            _buildTextField(
+                              label: 'Имя',
+                              controller: _nameController,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Пожалуйста, введите имя';
+                                }
+                                return null;
+                              },
+                              hintText: "Введите имя",
+                            ),
+                            _buildTextField(
+                              label: 'Почта',
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Пожалуйста, введите почту';
+                                }
+                                if (!value.contains('@')) {
+                                  return 'Введите корректный email';
+                                }
+                                return null;
+                              },
+                              hintText: "Введите почту",
+                            ),
+                            _buildTextField(
+                              label: 'Пароль',
+                              controller: _passwordController,
+                              obscureText: _passwordVis,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Пожалуйста, введите пароль';
+                                }
+                                if (value.length < 6) {
+                                  return 'Пароль должен быть не менее 6 символов';
+                                }
+                                return null;
+                              },
+                              hintText: "Введите пароль",
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _passwordVis ? Icons.visibility_off : Icons.visibility,
+                                  color: const Color(0xff6A6A6A),
+                                  size: 22,
+                                ),
+                                onPressed: () => setState(() => _passwordVis = !_passwordVis),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                              child: Row(
+                                children: [
+                                  Checkbox(
+                                    value: _termsAccepted,
+                                    onChanged: (value) => setState(() => _termsAccepted = value ?? false),
+                                    activeColor: const Color(0xffFE8160),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      'Даю согласие на обработку персональных данных',
+                                      style: GoogleFonts.nunitoSans(
+                                        color: const Color(0xff5B5B5B),
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              child: SizedBox(
+                                width: double.infinity,
+                                height: 55,
+                                child: ElevatedButton(
+                                  onPressed: _isLoading ? null : _register,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xffFE8160),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(40),
+                                    ),
+                                  ),
+                                  child: _isLoading
+                                      ? const CircularProgressIndicator(color: Colors.white)
+                                      : Text(
+                                    'Зарегистрироваться',
+                                    style: GoogleFonts.nunitoSans(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 20),
+                      child: RichText(
+                        text: TextSpan(
+                          text: "Есть аккаунт? ",
+                          style: GoogleFonts.nunitoSans(
+                            color: Colors.black,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          children: [
+                            TextSpan(
+                              text: "Войти",
+                              style: GoogleFonts.nunitoSans(
+                                color: Colors.black,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              recognizer: TapGestureRecognizer()
+                                ..onTap = () => Navigator.of(context).pushReplacement(
+                                  MaterialPageRoute(builder: (context) => const SignIn()),
+                                ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 25,
-                  vertical: 10,
-                ),
-                child: Row(
-                  children: [
-                    Checkbox(
-                      value: _termsAccepted,
-                      onChanged: (value) {
-                        setState(() {
-                          _termsAccepted = value ?? false;
-                        });
-                      },
-                      activeColor: const Color(0xffFE8160),
-                    ),
-                    Text(
-                      'Даю согласие на обработку\nперсональных данных',
-                      style: GoogleFonts.nunitoSans(
-                        color: const Color(0xff5B5B5B),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const Spacer(),
-                  ],
-                ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required String label,
+    required TextEditingController controller,
+    required String? Function(String?) validator,
+    String? hintText,
+    TextInputType? keyboardType,
+    bool obscureText = false,
+    Widget? suffixIcon,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: GoogleFonts.nunitoSans(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: controller,
+            keyboardType: keyboardType,
+            obscureText: obscureText,
+            validator: validator,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: const Color(0xffEDEEEE),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(20),
+                borderSide: const BorderSide(color: Color(0xffEDEEEE)),
               ),
-              TextButton(
-                onPressed: _isLoading ? null : _signUp,
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: Color(0xffFE8160),
-                    borderRadius: BorderRadius.all(Radius.circular(40)),
-                  ),
-                  width: MediaQuery.of(context).size.width * 0.9,
-                  height: 55,
-                  child: Center(
-                    child: _isLoading
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : Text(
-                      'Зарегистрироваться',
-                      style: GoogleFonts.nunitoSans(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(20),
+                borderSide: const BorderSide(color: Color(0xffEDEEEE)),
               ),
-              const SizedBox(height: 60),
-              RichText(
-                text: TextSpan(
-                  text: "Есть аккаунт? ",
-                  style: GoogleFonts.nunitoSans(
-                    color: Colors.black,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  children: [
-                    TextSpan(
-                      text: "Войти",
-                      style: GoogleFonts.nunitoSans(
-                        color: Colors.black,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      recognizer: TapGestureRecognizer()
-                        ..onTap = () {
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(builder: (context) => SignIn()),
-                          );
-                        },
-                    ),
-                  ],
-                ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(20),
+                borderSide: const BorderSide(color: Color(0xffEDEEEE)),
               ),
-            ],
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(20),
+                borderSide: const BorderSide(color: Colors.red),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(20),
+                borderSide: const BorderSide(color: Color(0xffEDEEEE)),
+              ),
+              hintText: hintText,
+              contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 15),
+              hintStyle: GoogleFonts.nunitoSans(color: Colors.grey),
+              suffixIcon: suffixIcon,
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

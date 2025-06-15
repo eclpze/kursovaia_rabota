@@ -1,73 +1,209 @@
-import 'package:flutter/material.dart';
-import 'package:kursovaia_work/Product.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'dart:convert';
 
-class Favorite extends StatelessWidget {
+import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:kursovaia_work/authorization/sign%20in.dart';
+import 'package:kursovaia_work/Product.dart';
+import 'package:kursovaia_work/main/Main.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class Favorite extends StatefulWidget {
   const Favorite({super.key});
 
-  Future<List<Map<String, dynamic>>> _fetchFavorites() async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) return [];
+  @override
+  State<Favorite> createState() => _FavoritePageState();
+}
 
-    final response = await Supabase.instance.client
-        .from('favorites')
-        .select('''
-          product:products (
-            id, 
-            name, 
-            price, 
-            image_url, 
-            description
-          )
-        ''')
-        .eq('user_id', userId);
+class _FavoritePageState extends State<Favorite> {
+  List<Map<String, dynamic>> _favoriteProducts = [];
+  bool _isLoading = true;
+  String? _userId;
 
-    return (response as List).map((item) => item['product'] as Map<String, dynamic>).toList();
+  @override
+  void initState() {
+    super.initState();
+    _loadUserIdAndFavorites();
+  }
+
+  Future<void> _loadUserIdAndFavorites() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _userId = prefs.getString('user_id');
+
+      if (_userId == null || _userId!.isEmpty) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final favoritesString = prefs.getString('user_favorites_$_userId');
+      if (favoritesString != null && favoritesString.isNotEmpty) {
+        final List<dynamic> favoritesList = jsonDecode(favoritesString);
+        setState(() {
+          _favoriteProducts =
+              favoritesList
+                  .map((item) => item as Map<String, dynamic>)
+                  .toList();
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading favorites: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _removeFavorite(String productId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final favoritesString = prefs.getString('user_favorites_$_userId');
+
+      if (favoritesString != null) {
+        List<dynamic> favoritesList = jsonDecode(favoritesString);
+        favoritesList.removeWhere((item) => item['id'].toString() == productId);
+
+        await prefs.setString(
+          'user_favorites_$_userId',
+          jsonEncode(favoritesList),
+        );
+
+        setState(() {
+          _favoriteProducts.removeWhere(
+            (product) => product['id'].toString() == productId,
+          );
+        });
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Товар удален из избранного',  style: GoogleFonts.nunitoSans())),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Ошибка: ${e.toString()}',  style: GoogleFonts.nunitoSans())));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _fetchFavorites(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (snapshot.hasError) {
-            return Center(child: Text('Ошибка загрузки', style: GoogleFonts.nunitoSans()));
-          }
-
-          final products = snapshot.data ?? [];
-
-          if (products.isEmpty) {
-            return Center(
-              child: Text(
-                'В избранном пока ничего нет',
-                style: GoogleFonts.nunitoSans(),
+      body:
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _userId == null || _userId!.isEmpty
+              ? _buildLoginPrompt()
+              : Column(
+                children: [
+                  SizedBox(height: 40),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 15,
+                      vertical: 15,
+                    ),
+                    child: Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(builder: (context) => Main()),
+                            );
+                          },
+                          child: SvgPicture.asset(
+                            'assets/icons/arrow-left.svg',
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          'Избранное',
+                          style: GoogleFonts.nunitoSans(
+                            color: const Color(0xff212121),
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const Spacer(),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: 15),
+                  Expanded(
+                    child:
+                        _favoriteProducts.isEmpty
+                            ? Center(
+                              child: Text(
+                                'Нет избранных товаров',
+                                style: GoogleFonts.nunitoSans(),
+                              ),
+                            )
+                            : Expanded(
+                              child: GridView.builder(
+                                shrinkWrap: true,
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 2,
+                                      childAspectRatio: 0.65,
+                                      crossAxisSpacing: 10,
+                                      mainAxisSpacing: 10,
+                                    ),
+                                itemCount: _favoriteProducts.length,
+                                padding: EdgeInsets.fromLTRB(10, 0, 10, 15),
+                                itemBuilder: (context, index) {
+                                  final product = _favoriteProducts[index];
+                                  return ProductCard(
+                                    product: product,
+                                    isFavorite: true,
+                                    onFavoritePressed:
+                                        () => _removeFavorite(
+                                          product['id'].toString(),
+                                        ), heroTag: '',
+                                  );
+                                },
+                              ),
+                            ),
+                  ),
+                ],
               ),
-            );
-          }
+    );
+  }
 
-          return GridView.builder(
-            padding: const EdgeInsets.all(16),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 0.75,
+  Widget _buildLoginPrompt() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'Чтобы просмотреть избранное, войдите в аккаунт',
+            style: GoogleFonts.nunitoSans(fontSize: 16),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xffFE8160),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
             ),
-            itemCount: products.length,
-            itemBuilder: (context, index) {
-              return ProductCard(product: products[index]);
+            onPressed: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const SignIn()),
+              );
             },
-          );
-        },
+            child: Text(
+              'Войти',
+              style: GoogleFonts.nunitoSans(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
-

@@ -25,14 +25,14 @@ class Categories extends StatelessWidget {
 
         return GridView.builder(
           shrinkWrap: true,
-          physics: NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
           ),
           itemCount: categories.length,
-          padding: EdgeInsets.fromLTRB(10, 15, 10, 0),
+          padding: const EdgeInsets.fromLTRB(10, 15, 10, 0),
           itemBuilder: (context, index) {
             final category = categories[index];
             return CategoryCard(category: category);
@@ -46,7 +46,7 @@ class Categories extends StatelessWidget {
 class CategoryCard extends StatelessWidget {
   final Map<String, dynamic> category;
 
-  const CategoryCard({Key? key, required this.category}) : super(key: key);
+  const CategoryCard({super.key, required this.category});
 
   @override
   Widget build(BuildContext context) {
@@ -68,7 +68,7 @@ class CategoryCard extends StatelessWidget {
               color: Colors.grey.withOpacity(0.2),
               spreadRadius: 1,
               blurRadius: 5,
-              offset: Offset(0, 2),
+              offset: const Offset(0, 2),
             ),
           ],
         ),
@@ -84,7 +84,7 @@ class CategoryCard extends StatelessWidget {
                 placeholder: (context, url) => Container(
                   color: Colors.grey[200],
                 ),
-                errorWidget: (context, url, error) => Icon(Icons.error),
+                errorWidget: (context, url, error) => const Icon(Icons.error),
               ),
             ),
             Container(
@@ -110,48 +110,101 @@ class CategoryCard extends StatelessWidget {
   }
 }
 
-class CategoryProductsPage extends StatelessWidget {
+class CategoryProductsPage extends StatefulWidget {
   final String categoryId;
 
-  const CategoryProductsPage({Key? key, required this.categoryId}) : super(key: key);
+  const CategoryProductsPage({
+    super.key,
+    required this.categoryId
+  });
+
+  @override
+  State<CategoryProductsPage> createState() => _CategoryProductsPageState();
+}
+
+class _CategoryProductsPageState extends State<CategoryProductsPage> {
+  late Future<Map<String, dynamic>?> _categoryFuture;
+  late Future<List<Map<String, dynamic>>> _productsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _categoryFuture = _fetchCategory();
+    _productsFuture = _fetchProducts();
+  }
+
+  Future<Map<String, dynamic>?> _fetchCategory() async {
+    try {
+      return await Supabase.instance.client
+          .from('categories')
+          .select()
+          .eq('id', widget.categoryId)
+          .single();
+    } catch (e) {
+      debugPrint('Error fetching category: $e');
+      return null;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchProducts() async {
+    try {
+      return await Supabase.instance.client
+          .from('products')
+          .select()
+          .eq('category_id', widget.categoryId);
+    } catch (e) {
+      debugPrint('Error fetching products: $e');
+      return [];
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(backgroundColor: Colors.white, surfaceTintColor: Colors.white               ,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
         title: FutureBuilder<Map<String, dynamic>?>(
-          future: Supabase.instance.client
-              .from('categories')
-              .select()
-              .eq('id', categoryId)
-              .single(),
+          future: _categoryFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return Text('Загрузка...', style: GoogleFonts.nunitoSans());
+              return Text(
+                'Загрузка...',
+                style: GoogleFonts.nunitoSans(
+                  fontWeight: FontWeight.w600,
+                ),
+              );
             }
-            if (snapshot.hasError) {
-              return Text('Ошибка загрузки', style: GoogleFonts.nunitoSans());
-            }
-            return Text(snapshot.data?['name'] ?? 'Категория');
+            return Text(
+              snapshot.data?['name'] ?? 'Категория',
+              style: GoogleFonts.nunitoSans(
+                fontWeight: FontWeight.w600,
+              ),
+            );
           },
         ),
+        centerTitle: true,
       ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: Supabase.instance.client
-            .from('products')
-            .select()
-            .eq('category_id', categoryId),
+        future: _productsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator(color: Colors.black));
+            return const Center(
+              child: CircularProgressIndicator(
+                color: Color(0xffFE8160),
+              ),
+            );
           }
 
           if (snapshot.hasError) {
             return Center(
               child: Text(
                 'Ошибка загрузки товаров',
-                style: GoogleFonts.nunitoSans(),
+                style: GoogleFonts.nunitoSans(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                ),
               ),
             );
           }
@@ -162,19 +215,32 @@ class CategoryProductsPage extends StatelessWidget {
             return Center(
               child: Text(
                 'В этой категории пока нет товаров',
-                style: GoogleFonts.nunitoSans(),
+                style: GoogleFonts.nunitoSans(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                ),
               ),
             );
           }
-          return MasonryGridView.count(
-            padding: EdgeInsets.all(16),
-            crossAxisCount: 2,
-            mainAxisSpacing: 16,
-            crossAxisSpacing: 16,
-            itemCount: products.length,
-            itemBuilder: (context, index) {
-              return ProductCard(product: products[index]);
-            },
+
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: MasonryGridView.count(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 15),
+              crossAxisCount: 2,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              itemCount: products.length,
+              itemBuilder: (context, index) {
+                final product = products[index];
+                return ProductCard(
+                  product: product,
+                  onFavoritePressed: () {},
+                  heroTag: 'product-${product['id']}', isFavorite: false,
+                );
+              },
+            ),
           );
         },
       ),
@@ -183,13 +249,15 @@ class CategoryProductsPage extends StatelessWidget {
 }
 
 class CategoriesPage extends StatefulWidget {
+  const CategoriesPage({super.key});
+
   @override
-  _CategoriesPageState createState() => _CategoriesPageState();
+  State<CategoriesPage> createState() => _CategoriesPageState();
 }
 
 class _CategoriesPageState extends State<CategoriesPage> {
   late Future<List<Map<String, dynamic>>> _categoriesFuture;
-  int _selectedCategory = 0;
+  int _selectedCategoryIndex = 0;
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -199,8 +267,22 @@ class _CategoriesPageState extends State<CategoriesPage> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchCategories() async {
-    final response = await Supabase.instance.client.from('categories').select();
-    return response;
+    try {
+      final response = await Supabase.instance.client
+          .from('categories')
+          .select()
+          .order('name', ascending: true);
+      return response;
+    } catch (e) {
+      debugPrint('Error fetching categories: $e');
+      throw Exception('Failed to load categories');
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -208,10 +290,13 @@ class _CategoriesPageState extends State<CategoriesPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text('Категории', style: GoogleFonts.nunitoSans(
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-        )),
+        title: Text(
+          'Категории',
+          style: GoogleFonts.nunitoSans(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         centerTitle: true,
         surfaceTintColor: Colors.white,
         backgroundColor: Colors.white,
@@ -221,7 +306,9 @@ class _CategoriesPageState extends State<CategoriesPage> {
         future: _categoriesFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator(color: Colors.black));
+            return const Center(
+              child: CircularProgressIndicator(color: Color(0xffFE8160)),
+            );
           }
 
           if (snapshot.hasError) {
@@ -253,11 +340,11 @@ class _CategoriesPageState extends State<CategoriesPage> {
                   itemCount: categories.length,
                   itemBuilder: (context, index) {
                     return Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: GestureDetector(
                         onTap: () {
                           setState(() {
-                            _selectedCategory = index;
+                            _selectedCategoryIndex = index;
                           });
                         },
                         child: Column(
@@ -267,20 +354,20 @@ class _CategoriesPageState extends State<CategoriesPage> {
                               categories[index]['name'] ?? 'Категория',
                               style: GoogleFonts.nunitoSans(
                                 fontSize: 16,
-                                fontWeight: _selectedCategory == index
+                                fontWeight: _selectedCategoryIndex == index
                                     ? FontWeight.bold
                                     : FontWeight.normal,
-                                color: _selectedCategory == index
-                                    ? Color(0xffFE8160)
+                                color: _selectedCategoryIndex == index
+                                    ? const Color(0xffFE8160)
                                     : Colors.grey,
                               ),
                             ),
-                            SizedBox(height: 8),
-                            if (_selectedCategory == index)
+                            const SizedBox(height: 8),
+                            if (_selectedCategoryIndex == index)
                               Container(
                                 height: 3,
                                 width: 40,
-                                color: Color(0xffFE8160),
+                                color: const Color(0xffFE8160),
                               ),
                           ],
                         ),
@@ -289,9 +376,10 @@ class _CategoriesPageState extends State<CategoriesPage> {
                   },
                 ),
               ),
-              Divider(height: 1, color: Colors.grey[300]),
+              const Divider(height: 1, color: Color(0xffF4F4F4)),
+
               Expanded(
-                child: _buildProductsList(categories[_selectedCategory]),
+                child: _buildProductsGrid(categories[_selectedCategoryIndex]),
               ),
             ],
           );
@@ -300,7 +388,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
     );
   }
 
-  Widget _buildProductsList(Map<String, dynamic> category) {
+  Widget _buildProductsGrid(Map<String, dynamic> category) {
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: Supabase.instance.client
           .from('products')
@@ -308,7 +396,9 @@ class _CategoriesPageState extends State<CategoriesPage> {
           .eq('category_id', category['id']),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator(color: Colors.black));
+          return const Center(
+            child: CircularProgressIndicator(color: Color(0xffFE8160)),
+          );
         }
 
         if (snapshot.hasError) {
@@ -331,30 +421,29 @@ class _CategoriesPageState extends State<CategoriesPage> {
           );
         }
 
-        return Expanded(
+        return Padding(
+          padding: const EdgeInsets.all(12),
           child: GridView.builder(
-            shrinkWrap: true,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              childAspectRatio: 0.75,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
+              childAspectRatio: 0.65,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
             ),
             itemCount: products.length,
-            padding: EdgeInsets.fromLTRB(10, 0, 10, 15),
             itemBuilder: (context, index) {
               final product = products[index];
-              return ProductCard(product: product);
+              return ProductCard(
+                product: product,
+                onFavoritePressed: () {},
+                heroTag: 'product-${product['id']}', isFavorite: false,
+              );
             },
           ),
         );
       },
     );
   }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
 }
+
+

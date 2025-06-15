@@ -1,77 +1,87 @@
+import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:kursovaia_work/globals.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'authorization/sign in.dart';
 
 class ProductCard extends StatelessWidget {
   final Map<String, dynamic> product;
+  final VoidCallback onFavoritePressed;
+  final bool isFavorite;
 
-  const ProductCard({Key? key, required this.product}) : super(key: key);
+  const ProductCard({
+    super.key,
+    required this.product,
+    required this.onFavoritePressed,
+    required this.isFavorite, required String heroTag,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(5, 10, 5, 15),
-      child: GestureDetector(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ProductDetailPage(product: product),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProductDetailPage(
+              product: product,
             ),
-          );
-        },
-        child: Container(
-          width: 190,
-          height: 200,
-          decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-          BoxShadow(
-          color: Colors.grey.withOpacity(0.2),
-          spreadRadius: 1,
-          blurRadius: 5,
-          offset: Offset(0, 2),)
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Color(0xffF4F4F4)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(12),
+              ),
               child: CachedNetworkImage(
                 imageUrl: product['image_url'] ?? '',
-                height: 130,
+                height: 150,
                 width: double.infinity,
                 fit: BoxFit.cover,
                 placeholder: (context, url) => Container(
                   color: Colors.grey[200],
-                  height: 120,
-                  width: double.infinity,
                 ),
-                errorWidget: (context, url, error) => Icon(Icons.error),
+                errorWidget: (context, url, error) => const Icon(Icons.error),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(8.0),
+              padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    product['name'] ?? '',
+                    product['name'] ?? 'Название товара',
                     style: GoogleFonts.nunitoSans(
                       fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                      fontSize: 16,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 4),
                   Text(
-                    '₽${product['price']?.toStringAsFixed(0) ?? '0'}',
+                    '${product['price']?.toStringAsFixed(2) ?? '0.00'} ₽',
                     style: GoogleFonts.nunitoSans(
-                      color: Colors.brown[800],
+                      color: const Color(0xffFE8160),
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
@@ -82,7 +92,6 @@ class ProductCard extends StatelessWidget {
           ],
         ),
       ),
-    ),
     );
   }
 }
@@ -90,7 +99,10 @@ class ProductCard extends StatelessWidget {
 class ProductDetailPage extends StatefulWidget {
   final Map<String, dynamic> product;
 
-  const ProductDetailPage({Key? key, required this.product}) : super(key: key);
+  const ProductDetailPage({
+    Key? key,
+    required this.product,
+  }) : super(key: key);
 
   @override
   State<ProductDetailPage> createState() => _ProductDetailPageState();
@@ -99,159 +111,177 @@ class ProductDetailPage extends StatefulWidget {
 class _ProductDetailPageState extends State<ProductDetailPage> {
   int _quantity = 1;
   bool _isFavorite = false;
-  bool _isProcessing = false;
-  final _supabase = Supabase.instance.client;
+  bool _isCheckingFavorite = true;
+  String? _userId;
 
   @override
   void initState() {
     super.initState();
-    _checkFavoriteStatus();
+    _loadUserIdAndCheckFavorite();
   }
 
-  Future<void> _checkFavoriteStatus() async {
-    final userId = _supabase.auth.currentUser?.id;
-    if (userId == null) return;
-
+  Future<void> _loadUserIdAndCheckFavorite() async {
     try {
-      final response = await _supabase
-          .from('favorites')
-          .select()
-          .eq('user_id', userId)
-          .eq('product_id', widget.product['id'])
-          .maybeSingle();
+      final prefs = await SharedPreferences.getInstance();
+      _userId = prefs.getString('user_id');
 
-      if (response != null) {
-        setState(() => _isFavorite = true);
+      if (_userId == null || _userId!.isEmpty) {
+        setState(() => _isCheckingFavorite = false);
+        return;
+      }
+
+      final favoritesString = prefs.getString('user_favorites_$_userId');
+      if (favoritesString != null) {
+        final List<dynamic> favoritesList = json.decode(favoritesString);
+        setState(() {
+          _isFavorite = favoritesList.any((item) => item['id'] == widget.product['id']);
+          _isCheckingFavorite = false;
+        });
+      } else {
+        setState(() => _isCheckingFavorite = false);
       }
     } catch (e) {
-      debugPrint('Error checking favorite status: $e');
+      setState(() => _isCheckingFavorite = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка проверки избранного: $e')),
+      );
     }
   }
 
   Future<void> _toggleFavorite() async {
-    if (_isProcessing) return;
-    setState(() => _isProcessing = true);
+    if (_userId == null || _userId!.isEmpty) {
+      _showLoginAlert();
+      return;
+    }
 
     try {
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) {
-        _showAuthError();
-        return;
-      }
+      final prefs = await SharedPreferences.getInstance();
+      final favoritesString = prefs.getString('user_favorites_$_userId');
+      List<dynamic> favoritesList = [];
 
-      if (_isFavorite) {
-        await _supabase
-            .from('favorites')
-            .delete()
-            .eq('user_id', userId)
-            .eq('product_id', widget.product['id']);
-      } else {
-        await _supabase.from('favorites').upsert({
-          'user_id': userId,
-          'product_id': widget.product['id'],
-          'created_at': DateTime.now().toIso8601String(),
-        });
+      if (favoritesString != null && favoritesString.isNotEmpty) {
+        favoritesList = json.decode(favoritesString);
       }
 
       setState(() => _isFavorite = !_isFavorite);
-      _showSnackBar(
-          _isFavorite ? 'Добавлено в избранное' : 'Удалено из избранного');
+
+      if (_isFavorite) {
+        favoritesList.add(widget.product);
+      } else {
+        favoritesList.removeWhere((item) => item['id'] == widget.product['id']);
+      }
+
+      await prefs.setString('user_favorites_$_userId', json.encode(favoritesList));
     } catch (e) {
-      _showSnackBar('Ошибка: ${e.toString()}');
-    } finally {
-      setState(() => _isProcessing = false);
+      setState(() => _isFavorite = !_isFavorite);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка обновления избранного: $e')),
+      );
     }
   }
 
   Future<void> _addToCart() async {
-    if (_isProcessing) return;
-    setState(() => _isProcessing = true);
+    if (_userId == null || _userId!.isEmpty) {
+      _showLoginAlert();
+      return;
+    }
 
     try {
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) {
-        _showAuthError();
-        return;
-      }
+      await CartService.addToCart(
+          _userId!,
+          widget.product['id'].toString(),
+          _quantity
+      );
 
-      final response = await _supabase
-          .from('cart_items')
-          .select('quantity')
-          .eq('user_id', userId)
-          .eq('product_id', widget.product['id'])
-          .maybeSingle();
-
-      final currentQuantity = response?['quantity'] ?? 0;
-      final newQuantity = currentQuantity + _quantity;
-
-      await _supabase.from('cart_items').upsert({
-        'user_id': userId,
-        'product_id': widget.product['id'],
-        'quantity': newQuantity,
-      });
-
-      _showSnackBar('Товар добавлен в корзину');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Добавлено в корзину: ${widget.product['name']} (x$_quantity)'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     } catch (e) {
-      _showSnackBar('Ошибка: ${e.toString()}');
-    } finally {
-      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка при добавлении в корзину: $e'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: GoogleFonts.nunitoSans()),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
+  void _showLoginAlert() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Требуется вход', style: GoogleFonts.nunitoSans()),
+        content: Text(
+          'Чтобы добавлять товары в корзину, пожалуйста, войдите в аккаунт.',
+          style: GoogleFonts.nunitoSans(),
         ),
-        margin: EdgeInsets.all(10),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Отмена', style: GoogleFonts.nunitoSans()),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SignIn()),
+              );
+            },
+            child: Text(
+              'Войти',
+              style: GoogleFonts.nunitoSans(color: Colors.orange),
+            ),
+          ),
+        ],
       ),
     );
-  }
-
-  void _showAuthError() {
-    _showSnackBar('Войдите в аккаунт для выполнения этого действия');
   }
 
   @override
   Widget build(BuildContext context) {
     final price = (widget.product['price'] as num).toDouble();
     final totalPrice = price * _quantity;
-    final theme = Theme.of(context);
 
     return Scaffold(
+      backgroundColor: Colors.white,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
             expandedHeight: 300,
             pinned: true,
             flexibleSpace: FlexibleSpaceBar(
-              background: Hero(
-                tag: 'product-${widget.product['id']}',
-                child: CachedNetworkImage(
-                  imageUrl: widget.product['image_url'] ?? '',
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(color: Colors.grey[200]),
-                  errorWidget: (context, url, error) => Icon(Icons.error),
-                ),
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.network(
+                    widget.product['image_url'] ?? '',
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) =>
+                        Container(color: Colors.grey[200]),
+                  ),
+                  Positioned(
+                    top: 45,
+                    right: 25,
+                    child: _isCheckingFavorite
+                        ? const CircularProgressIndicator()
+                        : GestureDetector(
+                      onTap: _toggleFavorite,
+                      child: Icon(
+                        _isFavorite
+                            ? Icons.favorite
+                            : Icons.favorite_border,
+                        color: _isFavorite ? Colors.red : Colors.black,
+                        size: 28,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            actions: [
-              IconButton(
-                icon: _isProcessing
-                    ? CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: theme.colorScheme.onPrimary,
-                )
-                    : Icon(
-                  _isFavorite ? Icons.favorite : Icons.favorite_border,
-                  color: _isFavorite ? Colors.red : theme.colorScheme.onPrimary,
-                ),
-                onPressed: _toggleFavorite,
-              ),
-            ],
           ),
           SliverToBoxAdapter(
             child: Padding(
@@ -272,10 +302,27 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     style: GoogleFonts.nunitoSans(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xffFE8160),
+                      color: const Color(0xffFE8160),
                     ),
                   ),
                   const SizedBox(height: 16),
+                  if (widget.product['is_popular'] == true)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          Icon(Icons.star, color: Colors.orange, size: 20),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Популярный товар',
+                            style: GoogleFonts.nunitoSans(
+                              color: Colors.orange,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   Text(
                     'Описание',
                     style: GoogleFonts.nunitoSans(
@@ -288,60 +335,67 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     widget.product['description'] ?? 'Нет описания',
                     style: GoogleFonts.nunitoSans(fontSize: 16),
                   ),
+                  if (widget.product['allergens'] != null &&
+                      widget.product['allergens'].isNotEmpty)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 16),
+                        Text(
+                          'Аллергены',
+                          style: GoogleFonts.nunitoSans(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          widget.product['allergens'],
+                          style: GoogleFonts.nunitoSans(fontSize: 16),
+                        ),
+                      ],
+                    ),
                   const SizedBox(height: 24),
                   _buildQuantitySelector(),
-                  const SizedBox(height: 80), // Space for bottom button
+                  const SizedBox(height: 80),
                 ],
               ),
             ),
           ),
         ],
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: Container(
-        width: MediaQuery.of(context).size.width * 0.9,
-        height: 56,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+      bottomNavigationBar: Padding(
+        padding: const EdgeInsets.all(16),
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xffFE8160),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(30),
             ),
-          ],
-        ),
-        child: FloatingActionButton.extended(
-          backgroundColor: Color(0xffFE8160),
-          onPressed: _isProcessing ? null : _addToCart,
-          label: _isProcessing
-              ? CircularProgressIndicator(
-            color: Colors.white,
-          )
-              : Row(
-            mainAxisSize: MainAxisSize.min,
+          ),
+          onPressed: _addToCart,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
                 'Добавить в корзину',
                 style: GoogleFonts.nunitoSans(
-                  fontSize: 16,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onPrimary,
+                  color: Colors.white,
                 ),
               ),
               const SizedBox(width: 8),
               Text(
                 '₽${totalPrice.toStringAsFixed(2)}',
                 style: GoogleFonts.nunitoSans(
-                  fontSize: 16,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onPrimary,
+                  color: Colors.white,
                 ),
               ),
             ],
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
           ),
         ),
       ),
@@ -394,357 +448,3 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
   }
 }
-
-
-// class _ProductDetailPageState extends State<ProductDetailPage> {
-//   bool _isFavorite = false;
-//   bool _isLoading = false;
-//   int _quantity = 1;
-//
-//   final _formKey = GlobalKey<FormState>();
-//
-//   @override
-//   void initState() {
-//     super.initState();
-//     _checkFavoriteStatus();
-//   }
-//
-//   Future<void> _checkFavoriteStatus() async {
-//     final userId = Supabase.instance.client.auth.currentUser?.id;
-//     if (userId == null) return;
-//
-//     setState(() => _isLoading = true);
-//     try {
-//       final response = await Supabase.instance.client
-//           .from('favorites')
-//           .select()
-//           .eq('user_id', userId)
-//           .eq('product_id', widget.product['id'])
-//           .single()
-//           .execute();
-//
-//       if (response.data != null) {
-//         setState(() => _isFavorite = true);
-//       }
-//     } catch (e) {
-//       // Если товар не найден в избранном, оставляем _isFavorite = false
-//     } finally {
-//       setState(() => _isLoading = false);
-//     }
-//   }
-//
-//   Future<void> _toggleFavorite() async {
-//     if (_isLoading) return;
-//     setState(() => _isLoading = true);
-//
-//     try {
-//       final userId = Supabase.instance.client.auth.currentUser?.id;
-//       if (userId == null) {
-//         if (mounted) {
-//           ScaffoldMessenger.of(context).showSnackBar(
-//             SnackBar(
-//               content: Text(
-//                 'Войдите в аккаунт',
-//                 style: GoogleFonts.nunitoSans(),
-//               ),
-//             ),
-//           );
-//         }
-//         return;
-//       }
-//
-//       if (_isFavorite) {
-//         await Supabase.instance.client
-//             .from('favorites')
-//             .delete()
-//             .eq('user_id', userId)
-//             .eq('product_id', widget.product['id']);
-//       } else {
-//         await Supabase.instance.client.from('favorites').upsert({
-//           'user_id': userId,
-//           'product_id': widget.product['id'],
-//           'created_at': DateTime.now().toIso8601String(),
-//         });
-//       }
-//
-//       setState(() => _isFavorite = !_isFavorite);
-//
-//       if (mounted) {
-//         ScaffoldMessenger.of(context).showSnackBar(
-//           SnackBar(
-//             duration: Duration(seconds: 1),
-//             backgroundColor: Color(0xffFE8160),
-//             content: Text(
-//               _isFavorite ? 'Добавлено в избранное' : 'Удалено из избранного',
-//               style: GoogleFonts.nunitoSans(),
-//             ),
-//           ),
-//         );
-//       }
-//     } catch (e) {
-//       if (mounted) {
-//         ScaffoldMessenger.of(context).showSnackBar(
-//           SnackBar(
-//             content: Text(
-//               'Ошибка: ${e.toString()}',
-//               style: GoogleFonts.nunitoSans(),
-//             ),
-//           ),
-//         );
-//       }
-//     } finally {
-//       if (mounted) {
-//         setState(() => _isLoading = false);
-//       }
-//     }
-//   }
-//
-//   Future<void> _addToCart() async {
-//     if (_isLoading) return;
-//     setState(() => _isLoading = true);
-//
-//     try {
-//       final userId = Supabase.instance.client.auth.currentUser?.id;
-//       if (userId == null) {
-//         if (mounted) {
-//           ScaffoldMessenger.of(context).showSnackBar(
-//             SnackBar(
-//               content: Text(
-//                 'Войдите в аккаунт',
-//                 style: GoogleFonts.nunitoSans(),
-//               ),
-//             ),
-//           );
-//         }
-//         return;
-//       }
-//
-//       final response = await Supabase.instance.client
-//           .from('cart_items')
-//           .select('quantity')
-//           .eq('user_id', userId)
-//           .eq('product_id', widget.product['id'])
-//           .maybeSingle();
-//
-//       int currentQuantity = 0;
-//
-//       final newQuantity = currentQuantity + _quantity;
-//
-//       await Supabase.instance.client.from('cart_items').upsert({
-//         'user_id': userId,
-//         'product_id': widget.product['id'],
-//         'quantity': newQuantity,
-//       });
-//
-//       if (mounted) {
-//         ScaffoldMessenger.of(context).showSnackBar(
-//           SnackBar(
-//             duration: Duration(seconds: 1),
-//             backgroundColor: Color(0xffFE8160),
-//             content: Text(
-//               'Товар добавлен в корзину',
-//               style: GoogleFonts.nunitoSans(),
-//             ),
-//           ),
-//         );
-//       }
-//     } catch (e) {
-//       if (mounted) {
-//         ScaffoldMessenger.of(context).showSnackBar(
-//           SnackBar(
-//             content: Text(
-//               'Ошибка: ${e.toString()}',
-//               style: GoogleFonts.nunitoSans(),
-//             ),
-//           ),
-//         );
-//       }
-//     } finally {
-//       if (mounted) {
-//         setState(() => _isLoading = false);
-//       }
-//     }
-//   }
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     final price = widget.product['price']?.toDouble() ?? 0.0;
-//     final totalPrice = price * _quantity;
-//
-//     return Scaffold(
-//       backgroundColor: Colors.white,
-//       appBar: AppBar(
-//         backgroundColor: Colors.white,
-//         surfaceTintColor: Colors.white,
-//         title: Text('Детали товара', style: GoogleFonts.nunitoSans()),
-//         actions: [
-//           IconButton(
-//             icon: _isLoading
-//                 ? SizedBox(
-//               width: 24,
-//               height: 24,
-//               child: CircularProgressIndicator(
-//                 strokeWidth: 2,
-//                 color: Color(0xffFE8160),
-//               ),
-//             )
-//                 : _isFavorite
-//                 ? SvgPicture.asset(
-//               'assets/icons/heart.svg',
-//               color: Colors.red,
-//             )
-//                 : SvgPicture.asset(
-//               'assets/icons/heart.svg',
-//               color: Colors.grey[700],
-//             ),
-//             onPressed: _isLoading ? null : _toggleFavorite,
-//           ),
-//         ],
-//       ),
-//       body: Form(
-//         key: _formKey,
-//         child: SingleChildScrollView(
-//           padding: EdgeInsets.all(16),
-//           child: Column(
-//             crossAxisAlignment: CrossAxisAlignment.start,
-//             children: [
-//               Container(
-//                 height: 250,
-//                 width: double.infinity,
-//                 decoration: BoxDecoration(
-//                   borderRadius: BorderRadius.circular(12),
-//                   image: DecorationImage(
-//                     image: CachedNetworkImageProvider(
-//                       widget.product['image_url'] ?? '',
-//                     ),
-//                     fit: BoxFit.cover,
-//                   ),
-//                 ),
-//               ),
-//               SizedBox(height: 20),
-//               Text(
-//                 widget.product['name'] ?? '',
-//                 style: GoogleFonts.nunitoSans(
-//                   fontSize: 24,
-//                   fontWeight: FontWeight.bold,
-//                 ),
-//               ),
-//               SizedBox(height: 10),
-//               Text(
-//                 '₽${price.toStringAsFixed(2)}',
-//                 style: GoogleFonts.nunitoSans(
-//                   fontSize: 20,
-//                   fontWeight: FontWeight.bold,
-//                   color: Colors.orange,
-//                 ),
-//               ),
-//               SizedBox(height: 15),
-//               Text(
-//                 'Описание',
-//                 style: GoogleFonts.nunitoSans(
-//                   fontSize: 18,
-//                   fontWeight: FontWeight.bold,
-//                 ),
-//               ),
-//               SizedBox(height: 8),
-//               Text(
-//                 widget.product['description'] ?? 'Нет описания',
-//                 style: GoogleFonts.nunitoSans(fontSize: 16),
-//               ),
-//               SizedBox(height: 20),
-//               Row(
-//                 children: [
-//                   Text(
-//                     'Количество:',
-//                     style: GoogleFonts.nunitoSans(
-//                       fontSize: 16,
-//                       fontWeight: FontWeight.bold,
-//                     ),
-//                   ),
-//                   Spacer(),
-//                   Row(
-//                     children: [
-//                       IconButton(
-//                         icon: Icon(Icons.remove),
-//                         onPressed: () {
-//                           if (_quantity > 1) {
-//                             setState(() => _quantity--);
-//                           }
-//                         },
-//                       ),
-//                       Text(
-//                         _quantity.toString(),
-//                         style: GoogleFonts.nunitoSans(
-//                           fontSize: 18,
-//                           fontWeight: FontWeight.bold,
-//                         ),
-//                       ),
-//                       IconButton(
-//                         icon: Icon(Icons.add),
-//                         onPressed: () {
-//                           setState(() => _quantity++);
-//                         },
-//                       ),
-//                     ],
-//                   ),
-//                 ],
-//               ),
-//             ],
-//           ),
-//         ),
-//       ),
-//       bottomNavigationBar: BottomAppBar(
-//         color: Color(0xffF4F4F4),
-//         padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-//         child: Row(
-//           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//           children: [
-//             Column(
-//               crossAxisAlignment: CrossAxisAlignment.start,
-//               mainAxisSize: MainAxisSize.min,
-//               children: [
-//                 Text(
-//                   'Итоговая цена',
-//                   style: GoogleFonts.nunitoSans(
-//                     fontSize: 14,
-//                     fontWeight: FontWeight.w500,
-//                     color: Color(0xff6E7489),
-//                   ),
-//                 ),
-//                 Text(
-//                   '₽${totalPrice.toStringAsFixed(2)}',
-//                   style: GoogleFonts.nunitoSans(
-//                     fontSize: 18,
-//                     fontWeight: FontWeight.w700,
-//                     color: Color(0xffFE8160),
-//                   ),
-//                 ),
-//               ],
-//             ),
-//             SizedBox(
-//               width: 200,
-//               child: ElevatedButton(
-//                 style: ElevatedButton.styleFrom(
-//                   backgroundColor: Color(0xffFE8160),
-//                   shape: RoundedRectangleBorder(
-//                     borderRadius: BorderRadius.circular(20),
-//                   ),
-//                   padding: EdgeInsets.symmetric(vertical: 12),
-//                 ),
-//                 onPressed: _isLoading ? null : _addToCart,
-//                 child: _isLoading
-//                     ? CircularProgressIndicator(color: Colors.white)
-//                     : Text(
-//                   'Добавить в корзину',
-//                   style: GoogleFonts.nunitoSans(
-//                       fontWeight: FontWeight.w600,
-//                       fontSize: 16, color: Colors.white),
-//                 ),
-//               ),
-//             ),
-//           ],
-//         ),
-//       ),
-//     );
-//   }
-// }

@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kursovaia_work/authorization/sign%20in.dart';
-import 'package:kursovaia_work/globals.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class Profile extends StatefulWidget {
   const Profile({super.key});
@@ -13,144 +12,169 @@ class Profile extends StatefulWidget {
 }
 
 class _ProfileState extends State<Profile> {
-  Map<String, dynamic>? _profile;
+  String _name = '';
+  String _email = '';
+  bool _isLoading = true;
 
   @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _name = prefs.getString('user_name') ?? 'Не указано';
+      _email = prefs.getString('user_email') ?? 'Не указано';
+      _isLoading = false;
+    });
+  }
+
+
+  Future<void> _signOut() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('user_id');
+    await prefs.remove('user_name');
+    await prefs.remove('user_email');
+
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const SignIn()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body:
-          Column(
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        title: const Text('Профиль'),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: SvgPicture.asset(
+              'assets/icons/edit.svg',
+              height: 20,
+            ),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProfileEdit(
+                    initialName: _name,
+                    initialEmail: _email,
+                    onProfileUpdated: _loadUserData,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 50, bottom: 5),
-                    child: Row(
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.only(left: 135, right: 110),
-                          child: Text(
-                            'Профиль',
-                            style: TextStyle(fontSize: 18),
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder:
-                                    (context) => ProfileEdit(
-                                      initialName: _profile?['name'],
-                                      initialEmail: _profile?['email'],
-                                    ),
-                              ),
-                            );
-                          },
-                          child: SvgPicture.asset(
-                            'assets/icons/edit.svg',
-                            height: 20,
-                          ),
-                        ),
-                      ],
-                    ),
+                  const SizedBox(height: 20),
+                  SvgPicture.asset(
+                    'assets/icons/account.svg',
+                    height: 100,
                   ),
-                  SvgPicture.asset('assets/icons/account.svg'),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 25,
-                      vertical: 5,
-                    ),
-                    child: Row(
-                      children: [
-                        Text('Имя', style: TopEditStyle),
-                        const Spacer(),
-                      ],
-                    ),
+                  const SizedBox(height: 30),
+                  _buildProfileField(
+                    label: 'Имя',
+                    value: _name,
                   ),
-                  Padding(
-                    padding: const EdgeInsets.all(15),
-                    child: Container(
-                      height: 60,
-                      width: MediaQuery.of(context).size.width * 0.9,
-                      decoration: BoxDecoration(
-                        color: const Color(0xffEDEEEE),
-                        borderRadius: const BorderRadius.all(
-                          Radius.circular(30),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            _profile?['name'] ?? '',
-                            style: TopEditStyle,
-                          ),
-                        ),
-                      ),
-                    ),
+                  const SizedBox(height: 20),
+                  _buildProfileField(
+                    label: 'Почта',
+                    value: _email,
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 25),
-                    child: Row(
-                      children: [
-                        Text('Почта', style: TopEditStyle),
-                        const Spacer(),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(15),
-                    child: Container(
-                      height: 60,
-                      width: MediaQuery.of(context).size.width * 0.9,
-                      decoration: BoxDecoration(
-                        color: const Color(0xffEDEEEE),
-                        borderRadius: const BorderRadius.all(
-                          Radius.circular(30),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            _profile?['email'] ?? '',
-                            style: TopEditStyle,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  TextButton(
-                    // onPressed: _signOut,
-                    onPressed: () {},
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xffFE8160),
-                        borderRadius: BorderRadius.circular(40),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 40,
-                        vertical: 15,
-                      ),
-                      child: Text('Выйти', style: ButtonTextStyle),
-                    ),
-                  ),
+                  const SizedBox(height: 40),
                 ],
               ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _signOut,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xffFE8160),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(40),
+                  ),
+                ),
+                child: Text(
+                  'Выйти',
+                  style: GoogleFonts.nunitoSans(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileField({required String label, required String value}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.nunitoSans(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.black,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: const Color(0xffEDEEEE),
+            borderRadius: BorderRadius.circular(30),
+          ),
+          child: Text(
+            value,
+            style: GoogleFonts.nunitoSans(
+              fontSize: 16,
+              color: Colors.black,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
 
 class ProfileEdit extends StatefulWidget {
-  final String? initialName;
-  final String? initialEmail;
+  final String initialName;
+  final String initialEmail;
+  final VoidCallback onProfileUpdated;
 
   const ProfileEdit({
     super.key,
     required this.initialName,
     required this.initialEmail,
+    required this.onProfileUpdated,
   });
 
   @override
@@ -158,16 +182,16 @@ class ProfileEdit extends StatefulWidget {
 }
 
 class _ProfileEditState extends State<ProfileEdit> {
-  final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _nameController;
+  late TextEditingController _emailController;
   bool _isLoading = false;
-  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _nameController.text = widget.initialName ?? '';
-    _emailController.text = widget.initialEmail ?? '';
+    _nameController = TextEditingController(text: widget.initialName);
+    _emailController = TextEditingController(text: widget.initialEmail);
   }
 
   @override
@@ -178,34 +202,120 @@ class _ProfileEditState extends State<ProfileEdit> {
   }
 
   Future<void> _updateProfile() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
 
     try {
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
-    } on AuthException catch (error) {
-      setState(() {
-        _errorMessage = error.message;
-      });
-    } catch (error) {
-      setState(() {
-        _errorMessage = 'Не удалось обновить профиль';
-      });
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_name', _nameController.text.trim());
+      await prefs.setString('user_email', _emailController.text.trim());
+
+      widget.onProfileUpdated();
+      if (!mounted) return;
+      Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка обновления: ${e.toString()}')),
+      );
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(backgroundColor: Colors.white, body: Column(children: []));
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        title: Text('Редактирование', style: GoogleFonts.nunitoSans(
+          fontWeight: FontWeight.bold,
+        ), textAlign: TextAlign.center,
+        ),
+        centerTitle: true,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              const SizedBox(height: 20),
+              SvgPicture.asset(
+                'assets/icons/account.svg',
+                height: 100,
+              ),
+              const SizedBox(height: 30),
+              TextFormField(
+                controller: _nameController,
+                decoration: InputDecoration(
+                  labelText: 'Имя',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xffEDEEEE),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Пожалуйста, введите имя';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  labelText: 'Почта',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xffEDEEEE),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Пожалуйста, введите почту';
+                  }
+                  if (!value.contains('@')) {
+                    return 'Введите корректный email';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: BottomAppBar(
+        color: Colors.white,
+        child: SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _isLoading ? null : _updateProfile,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xffFE8160),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(40),
+              ),
+            ),
+            child: _isLoading
+                ? const CircularProgressIndicator(color: Colors.white)
+                : Text(
+              'Сохранить',
+              style: GoogleFonts.nunitoSans(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

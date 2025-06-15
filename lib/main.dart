@@ -1,21 +1,22 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:kursovaia_work/globals.dart';
+import 'package:kursovaia_work/main/Main.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'authorization/register account.dart';
 import 'authorization/sign in.dart';
 
-Future<void> main() async {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await Supabase.initialize(
-    url: 'https://dzqvgirkmftcrtlfolee.supabase.co',
-    anonKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6cXZnaXJrbWZ0Y3J0bGZvbGVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAxMzgwMDMsImV4cCI6MjA1NTcxNDAwM30.GIiPuXo_GVX37kEtGmxNg4lKRImKh9a1XKThn2uQV1k',
-
+    url: SupabaseConfig.url,
+    anonKey: SupabaseConfig.anonKey,
   );
+
   runApp(MaterialApp(home: Splash()));
 }
-
 
 class Splash extends StatefulWidget {
   const Splash({super.key});
@@ -28,13 +29,25 @@ class _SplashScreenState extends State<Splash> {
   @override
   void initState() {
     super.initState();
-    {
-      Timer(const Duration(seconds: 2), () {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const Onboarding()),
-        );
-      });
-    }
+    _checkAuthStatus();
+  }
+
+  Future<void> _checkAuthStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasOnboarded = prefs.getBool('has_onboarded') ?? false;
+    final isLoggedIn = prefs.getString('user_id') != null;
+
+    await Future.delayed(const Duration(seconds: 2));
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (context) => isLoggedIn
+            ? Main()
+            : (hasOnboarded ? SignIn() : Onboarding()),
+      ),
+    );
   }
 
   @override
@@ -54,6 +67,8 @@ class Onboarding extends StatefulWidget {
 }
 
 class _OnboardingState extends State<Onboarding> {
+  final PageController _pageController = PageController();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -62,102 +77,70 @@ class _OnboardingState extends State<Onboarding> {
         children: [
           Expanded(
             child: PageView(
-              controller: SmoothController,
+              controller: _pageController,
               children: [
-                Column(
-                  children: [
-                    Image.asset('assets/images/onboarding1.png'),
-                    SizedBox(
-                      width: MediaQuery.of(context).size.width * 0.95,
-                      child: Text(
-                        'Бесконечное сладкое наслаждение',
-                        textAlign: TextAlign.center,
-                        style: OnboardingTopStyle,
-                      ),
+              _buildOnboardingPage(
+              image: 'assets/images/onboarding1.png',
+              title: 'Бесконечное сладкое наслаждение',
+              description: 'Окунитесь в мир восхитительных десертов, которые удовлетворят ваших сладкоежек благодаря нашему широкому выбору тортов, кексов и печенья.',
+            ),
+            _buildOnboardingPage(
+              image: 'assets/images/onboarding2.png',
+              title: 'Создайте торт своей мечты',
+              description: 'Наши гибкие варианты тортов на заказ позволяют вам персонализировать каждый аспект вашего торта, чтобы сделать его по-настоящему уникальным.',
+            ),
+            Column(
+              children: [
+                Image.asset('assets/images/onboarding3.png'),
+                SizedBox(
+                  width: MediaQuery.of(context).size.width * 0.95,
+                  child: Text(
+                    'Заказы без проблем',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
                     ),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 10),
-                      child: SizedBox(
-                        width: MediaQuery.of(context).size.width * 0.8,
-                        child: Text(
-                          'Окунитесь в мир восхитительных десертов, которые удовлетворят ваших сладкоежек благодаря нашему широкому выбору тортов, кексов и печенья.',
-                          style: OnboardingBotStyle,
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-                Column(
-                  children: [
-                    Image.asset('assets/images/onboarding2.png'),
-                    SizedBox(
-                      width: MediaQuery.of(context).size.width * 0.95,
-                      child: Text(
-                        'Создайте торт своей мечты',
-                        textAlign: TextAlign.center,
-                        style: OnboardingTopStyle,
-                      ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: MediaQuery.of(context).size.width * 0.95,
+                  child: Text(
+                    'Просто листайте каталог, выбирайте понравившийся вариант и оформляйте заказ в пару кликов. Безупречный вкус и праздничное настроение – гарантированы!',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey,
                     ),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 10),
-                      child: SizedBox(
-                        width: MediaQuery.of(context).size.width * 0.8,
-                        child: Text(
-                          'Наши гибкие варианты тортов на заказ позволяют вам персонализировать каждый аспект вашего торта, чтобы сделать его по-настоящему уникальным.',
-                          style: OnboardingBotStyle,
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                  ],
+                    textAlign: TextAlign.center,
+                  ),
                 ),
-                Column(
-                  children: [
-                    Image.asset('assets/images/onboarding3.png'),
-                    SizedBox(
-                      width: MediaQuery.of(context).size.width * 0.95,
-                      child: Text(
-                        'Заказы без проблем',
-                        textAlign: TextAlign.center,
-                        style: OnboardingTopStyle,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    SizedBox(
-                      width: MediaQuery.of(context).size.width * 0.95,
-                      child: Text(
-                        'Просто листайте каталог, выбирайте понравившийся вариант и оформляйте заказ в пару кликов. Безупречный вкус и праздничное настроение – гарантированы!',
-                        style: OnboardingBotStyle,
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 10),
-                      child: TextButton(
-                        onPressed: () {
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(builder: (context) => SignIn()),
-                          );
-                        },
-                        child: Container(
-                          height: 40,
-                          width: MediaQuery.of(context).size.width * 0.55,
-                          decoration: BoxDecoration(
-                            color: Color(0xffFE8160),
-                            borderRadius: BorderRadius.all(Radius.circular(20)),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 7),
-                            child: Text(
-                              'Начать покупки',
-                              style: ButtonTextStyle,
-                              textAlign: TextAlign.center,
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: TextButton(
+                    onPressed: _completeOnboarding,
+                    child: Container(
+                      height: 40,
+                      width: MediaQuery.of(context).size.width * 0.55,
+                      decoration: BoxDecoration(
+                        color: const Color(0xffFE8160),
+                        borderRadius: BorderRadius.all(Radius.circular(20)),),
+                        child: const Padding(
+                          padding: EdgeInsets.only(top: 7),
+                          child: Text(
+                            'Начать покупки',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
                             ),
+                            textAlign: TextAlign.center,
                           ),
                         ),
                       ),
                     ),
+                  ),
                   ],
                 ),
               ],
@@ -166,11 +149,11 @@ class _OnboardingState extends State<Onboarding> {
           Padding(
             padding: const EdgeInsets.only(bottom: 20),
             child: SmoothPageIndicator(
-              controller: SmoothController,
+              controller: _pageController,
               count: 3,
               effect: JumpingDotEffect(
-                activeDotColor: Color(0xffFE8160),
-                dotColor: Color(0xffFFE9E3),
+                activeDotColor: const Color(0xffFE8160),
+                dotColor: const Color(0xffFFE9E3),
                 dotWidth: 90,
                 dotHeight: 3,
               ),
@@ -178,6 +161,54 @@ class _OnboardingState extends State<Onboarding> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildOnboardingPage({
+    required String image,
+    required String title,
+    required String description,
+  }) {
+    return Column(
+      children: [
+        Image.asset(image),
+        SizedBox(
+          width: MediaQuery.of(context).size.width * 0.95,
+          child: Text(
+            title,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: SizedBox(
+            width: MediaQuery.of(context).size.width * 0.8,
+            child: Text(
+              description,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _completeOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('has_onboarded', true);
+
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (context) => const RegisterAccount()),
     );
   }
 }
