@@ -41,8 +41,8 @@ kursovaia_rabota/
 │   └── images/           # изображения
 ├── lib/
 │   ├── authorization/
-│   │   ├── register account.dart   # регистрация
-│   │   └── sign in.dart            # вход
+│   │   ├── register.dart   # регистрация
+│   │   └── sign.dart            # вход
 │   ├── main/
 │   │   ├── action.dart             # акции
 │   │   ├── cart.dart               # корзина
