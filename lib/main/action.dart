@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+// Виджет акции дня: на главном экране показывает картинку акции в зависимости от дня недели
 class DayOfWeekImage extends StatefulWidget {
   const DayOfWeekImage({super.key});
 
@@ -8,6 +9,7 @@ class DayOfWeekImage extends StatefulWidget {
 }
 
 class _DayOfWeekImageState extends State<DayOfWeekImage> {
+  // Путь к картинке акции: пн/ср/пт — тирамису, вт/чт — латте, сб/вс — торт
   String getImageForDayOfWeek(int dayOfWeek) {
     switch (dayOfWeek) {
       case DateTime.monday || DateTime.wednesday || DateTime.friday:
@@ -22,6 +24,7 @@ class _DayOfWeekImageState extends State<DayOfWeekImage> {
   }
 
   @override
+  // Определяем текущий день недели и выводим нужную картинку
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final dayOfWeek = now.weekday;
@@ -30,5 +33,3 @@ class _DayOfWeekImageState extends State<DayOfWeekImage> {
     return Image.asset(imagePath);
   }
 }
-
-
