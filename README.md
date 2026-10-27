@@ -1,16 +1,88 @@
-# kursovaia_rabota
+# 🍬 Приложение для продажи сладостей
 
-A new Flutter project.
+Курсовая работа (2 курс). Мобильное приложение для продажи сладостей, написанное на **Flutter / Dart**. Серверная часть реализована на **Supabase**.
 
-## Getting Started
+> ⚠️ **Статус серверной части:** база данных Supabase на данный момент не работает, поэтому функции, которые зависят от сервера (авторизация, загрузка товаров, корзина, избранное), временно недоступны. Интерфейс и навигация приложения при этом реализованы.
 
-This project is a starting point for a Flutter application.
+## О проекте
 
-A few resources to get you started if this is your first Flutter project:
+Пользователь может зарегистрироваться, войти в аккаунт, просматривать каталог сладостей по категориям, добавлять товары в корзину и избранное, а также открывать карточку товара и профиль.
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Дизайн
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Макет приложения создан в Figma.
+
+![Макет приложения](assets/images/figma.png)
+
+## Возможности
+
+- Регистрация и вход в аккаунт
+- Главный экран с акциями и популярными товарами
+- Каталог с категориями
+- Карточка товара
+- Корзина
+- Избранное
+- Профиль пользователя
+
+## Технологии
+
+| Часть | Технология |
+|-------|------------|
+| Клиент | Flutter, Dart |
+| Серверная часть | Supabase (PostgreSQL, Auth) |
+| IDE | Android Studio |
+
+## Структура проекта
+
+```
+kursovaia_rabota/
+├── assets/
+│   ├── icons/            # иконки
+│   └── images/           # изображения
+├── lib/
+│   ├── authorization/
+│   │   ├── register account.dart   # регистрация
+│   │   └── sign in.dart            # вход
+│   ├── main/
+│   │   ├── action.dart             # акции
+│   │   ├── cart.dart               # корзина
+│   │   ├── categories.dart         # категории
+│   │   ├── favorite.dart           # избранное
+│   │   ├── home.dart               # главная
+│   │   ├── mainScreen.dart         # основной экран с навигацией
+│   │   └── popular.dart            # популярные товары
+│   ├── globals.dart                # глобальные переменные и константы
+│   ├── main.dart                   # точка входа
+│   ├── product.dart                # карточка товара
+│   └── profile.dart                # профиль
+├── pubspec.yaml
+└── README.md
+```
+
+## Запуск проекта
+
+1. Установите [Flutter SDK](https://docs.flutter.dev/get-started/install).
+2. Склонируйте репозиторий:
+   ```bash
+   git clone https://github.com/eclpze/kursovaia_rabota.git
+   cd kursovaia_rabota
+   ```
+3. Установите зависимости:
+   ```bash
+   flutter pub get
+   ```
+4. Запустите приложение на эмуляторе или устройстве:
+   ```bash
+   flutter run
+   ```
+
+## Настройка Supabase
+
+Для работы серверной части нужен проект в [Supabase](https://supabase.com). Ключи подключения (URL проекта и `anon key`) указываются при инициализации в `main.dart`:
+
+```dart
+await Supabase.initialize(
+  url: 'YOUR_SUPABASE_URL',
+  anonKey: 'YOUR_SUPABASE_ANON_KEY',
+);
+```
